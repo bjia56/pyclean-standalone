@@ -23,13 +23,15 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
-      - name: Extract version and check if tag exists
+      - name: Determine next version with subpatch
         id: set-version
         run: |
           # Create virtualenv and install pyclean
@@ -38,24 +40,31 @@ jobs:
           pip install -r requirements.txt
 
           # Extract version from --version flag
-          VERSION=$(pyclean --version | grep -oP '[0-9]+\.[0-9]+\.[0-9]+')
+          BASE_VERSION=$(pyclean --version | grep -oP '[0-9]+\.[0-9]+\.[0-9]+')
 
-          if [ -z "$VERSION" ]; then
+          if [ -z "$BASE_VERSION" ]; then
             echo "Failed to extract version from pyclean --version"
             exit 1
           fi
 
-          echo "Detected version: $VERSION"
-          TAG="v$VERSION"
+          echo "Base version: $BASE_VERSION"
 
-          # Check if tag already exists
-          if git rev-parse "$TAG" >/dev/null 2>&1; then
-            echo "Error: Tag $TAG already exists."
-            exit 1
+          # Get all existing tags for this base version
+          EXISTING_TAGS=$(git tag -l "v${BASE_VERSION}.*" | sort -V)
+
+          if [ -z "$EXISTING_TAGS" ]; then
+            # No existing tags for this version, start with .0
+            NEXT_VERSION="v${BASE_VERSION}.0"
+          else
+            # Find the highest subpatch number
+            HIGHEST_TAG=$(echo "$EXISTING_TAGS" | tail -n 1)
+            CURRENT_SUBPATCH=$(echo "$HIGHEST_TAG" | sed "s/v${BASE_VERSION}\.//" | sed 's/-.*//')
+            NEXT_SUBPATCH=$((CURRENT_SUBPATCH + 1))
+            NEXT_VERSION="v${BASE_VERSION}.${NEXT_SUBPATCH}"
           fi
 
-          echo "Tag $TAG is available for creation"
-          echo "version=$TAG" >> $GITHUB_OUTPUT
+          echo "Next version will be: $NEXT_VERSION"
+          echo "version=$NEXT_VERSION" >> $GITHUB_OUTPUT
 
   build:
     name: Build
