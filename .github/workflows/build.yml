@@ -27,7 +27,10 @@ jobs:
           wget https://cosmo.zip/pub/cosmos/bin/python -O python.exe
           chmod +x python.exe
 
-          PY_VERSION=$(./python.exe -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')")
+          wget https://cosmo.zip/pub/cosmos/bin/ape-x86_64.elf -O /tmp/ape-x86_64.elf
+          chmod +x /tmp/ape-x86_64.elf
+
+          PY_VERSION=$(/tmp/ape-x86_64.elf ./python.exe -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')")
           echo "py_version=$PY_VERSION" >> $GITHUB_ENV
 
       - name: Set up Python
@@ -38,10 +41,16 @@ jobs:
       - name: Install and bundle dependencies
         run: |
           mkdir target
+          mkdir wheels
 
-          # We're adding piwheels as an extra index-url to grab pre-built
-          # python-only wheels for packages that only provide source distributions.
-          pip install --extra-index-url https://www.piwheels.org/simple --target=./target --implementation py --platform any --abi none --only-binary=:all: -r requirements.txt
+          # Extract pyclean version from requirements.txt
+          PYCLEAN_VERSION=$(grep -oP 'pyclean==\K[0-9]+\.[0-9]+\.[0-9]+' requirements.txt)
+
+          # Build wheel
+          pip wheel --no-deps pyclean==$PYCLEAN_VERSION
+
+          # Install pyclean from local wheel, using piwheels as backup for dependencies
+          pip install --extra-index-url https://www.piwheels.org/simple --target=./target --implementation py --platform any --abi none --only-binary=:all: ./pyclean-$PYCLEAN_VERSION-py3-none-any.whl
 
           folders=$(ls target)
 
@@ -106,6 +115,11 @@ jobs:
             --os MidnightBSD /tmp/blink/blink-midnightbsd-* \
             --os Haiku /tmp/blink/blink-haiku-* \
             --os Darwin /tmp/blink/blink-macos-*
+          chmod +x pyclean
+
+      - name: Verify binary
+        run: |
+          ./pyclean --version
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
