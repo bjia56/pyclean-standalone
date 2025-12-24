@@ -1,0 +1,58 @@
+name: Build
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_call:
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Get Cosmopolitan Python
+        run: |
+          wget https://cosmo.zip/pub/cosmos/bin/python -O python.exe
+          chmod +x python.exe
+
+          PY_VERSION=$(./python.exe -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')")
+          echo "py_version=$PY_VERSION" >> $GITHUB_ENV
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.py_version }}
+
+      - name: Install and bundle dependencies
+        run: |
+          mkdir target
+
+          # We're adding piwheels as an extra index-url to grab pre-built
+          # python-only wheels for packages that only provide source distributions.
+          pip install --extra-index-url https://www.piwheels.org/simple --target=./target --implementation py --platform any --abi none --only-binary=:all: -r requirements.txt
+
+          folders=$(ls target)
+
+          for folder in $folders; do
+            python scripts/add_to_zip.py ./target/"$folder" ./python.exe Lib/site-packages/"$folder"
+          done
+
+          zip -urj python.exe scripts/.args
+
+      - name: Rename
+        run: mv python.exe pyclean.exe
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: pyclean-executable
+          path: pyclean.exe
