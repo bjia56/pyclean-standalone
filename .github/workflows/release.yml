@@ -26,24 +26,14 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-
       - name: Determine next version with subpatch
         id: set-version
         run: |
-          # Create virtualenv and install pyclean
-          python -m venv venv
-          source venv/bin/activate
-          pip install -r requirements.txt
-
-          # Extract version from --version flag
-          BASE_VERSION=$(pyclean --version | grep -oP '[0-9]+\.[0-9]+\.[0-9]+')
+          # Extract version from requirements.txt
+          BASE_VERSION=$(grep -oP 'pyclean==\K[0-9]+\.[0-9]+\.[0-9]+' requirements.txt)
 
           if [ -z "$BASE_VERSION" ]; then
-            echo "Failed to extract version from pyclean --version"
+            echo "Failed to extract version from requirements.txt"
             exit 1
           fi
 
